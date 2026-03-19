@@ -361,16 +361,98 @@ if i say yes, delete them. if i say no, leave them.
 }
 ```
 
-## ssh / remote machines
+## ssh / et / remote machines
 
-the same hooks work on both local and remote machines. no separate config needed.
+when you ssh (or et) into a remote machine and run claude code there, cmux-claude-pro can update **your local sidebar** with the remote session's status, including the remote hostname and cwd.
 
-- **local (cmux running):** full sidebar integration
-- **remote (no cmux):** handler checks for `CMUX_SOCKET_PATH` + `CMUX_WORKSPACE_ID`, finds neither, exits 0 silently. zero overhead.
+### how it works
+
+the cmux unix socket gets forwarded to the remote machine via SSH's `-R` flag. the handler on the remote detects `SSH_CONNECTION`, grabs the hostname, and talks to your local cmux through the forwarded socket.
+
+```
+local cmux sidebar ← unix socket ← SSH -R tunnel ← remote handler ← claude code hooks
+```
+
+when SSH isn't detected, the handler shows local info as usual.
+
+### setup (one-time per remote host)
+
+**step 1 — local machine:** create a symlink (cmux socket path has spaces that break SSH):
 
 ```bash
-# deploy to remote
-scp ~/.cc-cmux/handler.cjs ~/.cc-cmux/tab-title-worker.cjs ~/.cc-cmux/config.json remote:~/.cc-cmux/
+# add to your ~/.zshrc or ~/.bashrc
+if [ -S "$CMUX_SOCKET_PATH" ]; then
+  ln -sf "$CMUX_SOCKET_PATH" /tmp/cmux-local.sock 2>/dev/null
+  printf 'export CMUX_WORKSPACE_ID=%s\nexport CMUX_SURFACE_ID=%s\n' \
+    "${CMUX_WORKSPACE_ID:-}" "${CMUX_SURFACE_ID:-}" > /tmp/cmux-fwd.env 2>/dev/null
+fi
+```
+
+**step 2 — local machine:** add socket forwarding to `~/.ssh/config`:
+
+```
+Host myserver
+  RemoteForward /tmp/cmux-fwd.sock /tmp/cmux-local.sock
+```
+
+**step 3 — remote machine:** enable socket reuse in sshd (one-time, needs sudo):
+
+```bash
+echo "StreamLocalBindUnlink yes" | sudo tee -a /etc/ssh/sshd_config
+# macOS:
+sudo launchctl kickstart -k system/com.openssh.sshd
+# Linux:
+sudo systemctl restart sshd
+```
+
+**step 4 — remote machine:** deploy handler + add socket detection:
+
+```bash
+# copy handler files from local
+scp ~/.cc-cmux/handler.cjs ~/.cc-cmux/tab-title-worker.cjs ~/.cc-cmux/config.json myserver:~/.cc-cmux/
+
+# or run the remote setup script
+scp remote-setup.sh myserver: && ssh myserver bash remote-setup.sh
+```
+
+add to the remote machine's `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# cmux-claude-pro: detect forwarded cmux socket
+if [ -S /tmp/cmux-fwd.sock ] && [ -n "$SSH_CONNECTION" ]; then
+  export CMUX_SOCKET_PATH=/tmp/cmux-fwd.sock
+  [ -f /tmp/cmux-fwd.env ] && . /tmp/cmux-fwd.env
+fi
+```
+
+### what the sidebar shows for SSH sessions
+
+```
+host: user@macmini (ssh)              ← yellow network icon
+remote_cwd: /home/user/dev/project   ← gray folder icon
+model: opus-4.6                      ← purple cpu icon
+claude_code: Working: Bash: npm test ← blue hammer
+[claude] [info] SSH session: user@macmini
+```
+
+### for ET (eternal terminal)
+
+ET doesn't support socket forwarding. run a background SSH tunnel alongside it:
+
+```bash
+# start socket tunnel (runs in background, stays alive)
+ssh -N -f -R /tmp/cmux-fwd.sock:/tmp/cmux-local.sock myserver
+
+# then use et normally
+et myserver
+```
+
+or use the `cmux-ssh` wrapper:
+
+```bash
+# background tunnel mode for ET
+cmux-ssh -N -f myserver
+et myserver
 ```
 
 ## how it works

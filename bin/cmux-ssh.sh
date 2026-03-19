@@ -2,41 +2,41 @@
 # cmux-ssh — SSH wrapper that forwards the cmux socket to the remote machine
 #
 # usage: cmux-ssh <host> [ssh-args...]
-#    or: cmux-ssh user@host [ssh-args...]
 #
 # what it does:
-#   1. forwards your local cmux socket to /tmp/cmux-fwd.sock on the remote
-#   2. exports CMUX_SOCKET_PATH, CMUX_WORKSPACE_ID, CMUX_SURFACE_ID on the remote
-#   3. the cc-cmux handler on the remote machine can now update YOUR sidebar
+#   1. writes workspace/surface IDs to /tmp/cmux-fwd.env
+#   2. scp's the env file to the remote machine
+#   3. SSH's with -R to forward the cmux socket
+#   4. the cc-cmux handler on the remote can now update YOUR sidebar
 #
-# works transparently — just replace `ssh` with `cmux-ssh` when using cmux.
-# outside cmux (no CMUX_SOCKET_PATH), falls through to plain ssh.
+# works with any SSH host. outside cmux, falls through to plain ssh.
+# for ET (eternal terminal), run `cmux-ssh -N -f <host>` first as a
+# background tunnel, then use `et <host>` normally.
 
 set -e
 
-# If not in cmux, just pass through to ssh
-if [ -z "$CMUX_SOCKET_PATH" ] || [ ! -S "$CMUX_SOCKET_PATH" ]; then
-  exec ssh "$@"
-fi
-
-HOST="$1"
+HOST="${1:?usage: cmux-ssh <host> [ssh-args...]}"
 shift
 
-if [ -z "$HOST" ]; then
-  echo "usage: cmux-ssh <host> [ssh-args...]" >&2
-  exit 1
+# If not in cmux, just pass through to ssh
+if [ -z "$CMUX_SOCKET_PATH" ] || [ ! -S "$CMUX_SOCKET_PATH" ]; then
+  exec ssh "$HOST" "$@"
 fi
+
+# Ensure symlink exists (cmux socket path has spaces)
+SOCK_LINK="/tmp/cmux-local.sock"
+if [ ! -S "$SOCK_LINK" ]; then
+  ln -sf "$CMUX_SOCKET_PATH" "$SOCK_LINK"
+fi
+
+# Write env file with workspace/surface IDs
+ENV_FILE="/tmp/cmux-fwd.env"
+printf 'export CMUX_WORKSPACE_ID=%s\nexport CMUX_SURFACE_ID=%s\n' \
+  "$CMUX_WORKSPACE_ID" "$CMUX_SURFACE_ID" > "$ENV_FILE"
+
+# Copy env file to remote (ignore errors — first use might not have the dir)
+scp -q "$ENV_FILE" "$HOST:/tmp/cmux-fwd.env" 2>/dev/null || true
 
 REMOTE_SOCK="/tmp/cmux-fwd.sock"
 
-# Build environment exports for the remote shell
-REMOTE_ENV="export CMUX_SOCKET_PATH=$REMOTE_SOCK"
-REMOTE_ENV="$REMOTE_ENV; export CMUX_WORKSPACE_ID=$CMUX_WORKSPACE_ID"
-REMOTE_ENV="$REMOTE_ENV; export CMUX_SURFACE_ID=$CMUX_SURFACE_ID"
-REMOTE_ENV="$REMOTE_ENV; export CMUX_SSH_HOST=$(hostname -s)"
-
-exec ssh \
-  -R "$REMOTE_SOCK:$CMUX_SOCKET_PATH" \
-  -o "SendEnv=CMUX_WORKSPACE_ID CMUX_SURFACE_ID" \
-  -t "$HOST" "$@" \
-  "$REMOTE_ENV; exec \$SHELL -l"
+exec ssh -R "$REMOTE_SOCK:$SOCK_LINK" "$HOST" "$@"
