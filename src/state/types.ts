@@ -37,6 +37,8 @@ export interface SessionState {
   gitDirty: boolean;
   currentTabTitle: string | null;
   model: string | null;
+  /** Status saved before compaction, restored in PostCompact */
+  preCompactStatus: string | null;
   isInTurn: boolean;
   turnNumber: number;
   turnStartTime: number;

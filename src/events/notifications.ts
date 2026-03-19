@@ -17,6 +17,11 @@ import { LOG_SOURCE } from '../features/logger.js';
 /**
  * Handle Notification — forward to cmux desktop notification.
  * Uses notifyTarget for workspace-specific delivery (like official cmux hooks).
+ *
+ * IMPORTANT: This handler NEVER changes the sidebar status pill.
+ * Only PermissionRequest should set "Waiting" / "Needs input" status.
+ * Notifications fire for many reasons (subagent completions, informational
+ * messages) and keyword-matching them caused false "Needs input" stalls.
  */
 export async function onNotification(
   event: NotificationInput,
@@ -29,24 +34,6 @@ export async function onNotification(
 
   const title = event.title ?? 'Claude Code';
   const message = event.message ?? '';
-  const notifType = (event as any).notification_type ?? '';
-
-  // Only set "Needs input" for notifications that actually require user action
-  // (permission, question, waiting). Skip for informational/completion notifications.
-  const needsInput = /permission|question|input|waiting|attention/i.test(
-    `${title} ${message} ${notifType}`,
-  );
-
-  if (needsInput) {
-    try {
-      socket.fire(
-        cmd.setStatus('claude_code', 'Needs input', {
-          icon: 'bell.fill',
-          color: '#4C8DFF',
-        }),
-      );
-    } catch {}
-  }
 
   try {
     socket.fire(cmd.notifyTarget(env.workspaceId, env.surfaceId, title, '', message));

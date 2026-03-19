@@ -45,6 +45,7 @@ export class StateManager {
       gitDirty: false,
       currentTabTitle: null,
       model: null,
+      preCompactStatus: null,
       isInTurn: false,
       turnNumber: 0,
       turnStartTime: 0,

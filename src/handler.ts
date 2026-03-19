@@ -112,11 +112,11 @@ async function main(): Promise<void> {
         break;
 
       case 'PreCompact':
-        await onPreCompact(socket, cmd, config);
+        await onPreCompact(socket, cmd, state, config);
         break;
 
       case 'PostCompact':
-        await onPostCompact(socket, cmd, config);
+        await onPostCompact(socket, cmd, state, config);
         break;
 
       case 'WorktreeCreate':

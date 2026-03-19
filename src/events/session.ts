@@ -113,12 +113,7 @@ export async function onSessionStart(
     commands.push(cmd.clearMeta('remote_cwd'));
   }
 
-  // Report model
-  if (s.model) {
-    commands.push(
-      cmd.reportMeta('model', s.model, { icon: 'cpu', color: '#8B5CF6' }),
-    );
-  }
+  // Model metadata removed — wastes sidebar space, already visible in Claude Code UI
 
   // Send all initialization commands
   try {
@@ -158,10 +153,8 @@ export async function onSessionEnd(
   }
 
   // Clear metadata
-  commands.push(cmd.clearMeta('model'));
   commands.push(cmd.clearMeta('host'));
   commands.push(cmd.clearMeta('remote_cwd'));
-  commands.push(cmd.clearStatus('git'));
 
   try {
     await socket.sendBatch(commands);

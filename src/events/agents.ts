@@ -84,12 +84,12 @@ export async function onSubagentStop(
     s.activeSubagents = Math.max(0, s.activeSubagents - 1);
   });
 
-  // Log agent completion
+  // Log agent completion (info level, not success — avoids confusion with main "Done")
   if (config.features.logs) {
     try {
       socket.fire(
-        cmd.log(`Agent done: ${agentType}`, {
-          level: 'success',
+        cmd.log(`Subagent done: ${agentType}`, {
+          level: 'info',
           source: 'claude',
         }),
       );
