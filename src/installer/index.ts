@@ -147,8 +147,8 @@ export async function run(): Promise<void> {
     spin3.stop(pc.yellow('Handler files not found in dist/ — run "npm run build" first'));
   }
 
-  // Step 5: Generate hooks
-  const hooks = generateHooks(choices, HANDLER_DEST);
+  // Step 5: Generate hooks (use tilde path for portability across users)
+  const hooks = generateHooks(choices, '~/.cc-cmux/handler.cjs');
 
   // Step 6: Merge hooks into settings
   const spin4 = p.spinner();
@@ -161,6 +161,16 @@ export async function run(): Promise<void> {
     spin4.stop('Hooks merged');
   } else {
     spin4.stop(pc.red('Failed to merge hooks'));
+  }
+
+  // Step 6b: Disable cmux's built-in Claude hooks (they conflict with ours)
+  try {
+    execSync('defaults write com.cmuxterm.app claudeCodeHooksEnabled -bool false', {
+      timeout: 3000,
+    });
+    p.log.info('Disabled cmux built-in Claude hooks (conflicts with cc-cmux)');
+  } catch {
+    // Non-critical — cmux might not be installed or using a different bundle ID
   }
 
   // Step 7: Show merge report
@@ -206,7 +216,118 @@ export async function run(): Promise<void> {
   });
   p.note(verifyLines.join('\n'), 'Verification');
 
-  // Step 9: Outro
+  // Step 9: Add cmux socket symlink to shell profile (for SSH forwarding)
+  const shellProfile = join(homedir(), '.zshrc');
+  try {
+    const profileContent = existsSync(shellProfile) ? readFileSync(shellProfile, 'utf-8') : '';
+    if (!profileContent.includes('cmux-local.sock')) {
+      const symBlock = [
+        '',
+        '# cc-cmux: symlink cmux socket (spaces in path break SSH -R)',
+        'if [ -S "$CMUX_SOCKET_PATH" ]; then',
+        '  ln -sf "$CMUX_SOCKET_PATH" /tmp/cmux-local.sock 2>/dev/null',
+        'fi',
+      ].join('\n');
+      writeFileSync(shellProfile, profileContent + symBlock + '\n', 'utf-8');
+      p.log.info('Added cmux socket symlink to ~/.zshrc');
+    }
+  } catch {
+    // Non-critical
+  }
+
+  // Step 10: Optional SSH remote setup
+  const wantSSH = await p.confirm({
+    message: 'Set up SSH remote integration? (sidebar works over SSH)',
+    initialValue: false,
+  });
+
+  if (!p.isCancel(wantSSH) && wantSSH) {
+    const remoteHost = await p.text({
+      message: 'SSH host name (as in ~/.ssh/config):',
+      placeholder: 'myserver',
+      validate: (v) => (v.trim() ? undefined : 'Host name required'),
+    });
+
+    if (!p.isCancel(remoteHost) && remoteHost) {
+      const host = (remoteHost as string).trim();
+
+      // Add RemoteForward + SendEnv to SSH config
+      const sshConfigPath = join(homedir(), '.ssh', 'config');
+      try {
+        let sshContent = existsSync(sshConfigPath) ? readFileSync(sshConfigPath, 'utf-8') : '';
+        const hostPattern = new RegExp(`^\\s*Host\\s+${host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm');
+        const hasHost = hostPattern.test(sshContent);
+
+        if (hasHost) {
+          // Check if RemoteForward already present
+          if (!sshContent.includes('/tmp/cmux-fwd.sock')) {
+            sshContent = sshContent.replace(
+              hostPattern,
+              `Host ${host}\n    RemoteForward /tmp/cmux-fwd.sock /tmp/cmux-local.sock\n    SendEnv CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID`,
+            );
+            writeFileSync(sshConfigPath, sshContent, 'utf-8');
+            p.log.info(`Added RemoteForward + SendEnv to SSH config for ${host}`);
+          } else {
+            p.log.info(`SSH config for ${host} already has socket forwarding`);
+          }
+        } else {
+          // Append new Host block
+          const block = [
+            '',
+            `# cc-cmux: socket + env forwarding for sidebar integration`,
+            `Host ${host}`,
+            `    RemoteForward /tmp/cmux-fwd.sock /tmp/cmux-local.sock`,
+            `    SendEnv CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID`,
+          ].join('\n');
+          mkdirSync(join(homedir(), '.ssh'), { recursive: true, mode: 0o700 } as any);
+          writeFileSync(sshConfigPath, sshContent + block + '\n', 'utf-8');
+          p.log.info(`Added Host ${host} with socket forwarding to SSH config`);
+        }
+      } catch {
+        p.log.warn('Could not update SSH config. Add manually to ~/.ssh/config');
+      }
+
+      // Offer to deploy handler to remote
+      const deployRemote = await p.confirm({
+        message: `Deploy handler to ${host}?`,
+        initialValue: true,
+      });
+
+      if (!p.isCancel(deployRemote) && deployRemote) {
+        try {
+          execSync(`ssh ${host} 'mkdir -p ~/.cc-cmux'`, { timeout: 10000 });
+          execSync(`scp ~/.cc-cmux/handler.cjs ${host}:~/.cc-cmux/handler.cjs`, { timeout: 30000 });
+          p.log.info(`Handler deployed to ${host}:~/.cc-cmux/handler.cjs`);
+        } catch {
+          p.log.warn(`Could not deploy to ${host}. Copy manually: scp ~/.cc-cmux/handler.cjs ${host}:~/.cc-cmux/`);
+        }
+      }
+
+      // Show remaining manual steps
+      p.note(
+        [
+          `On ${host}, run:`,
+          '',
+          `  # Accept env vars + allow socket reuse (needs sudo)`,
+          `  echo "AcceptEnv CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID" | sudo tee -a /etc/ssh/sshd_config`,
+          `  echo "StreamLocalBindUnlink yes" | sudo tee -a /etc/ssh/sshd_config`,
+          `  sudo launchctl kickstart -k system/com.openssh.sshd  # macOS`,
+          `  # sudo systemctl restart sshd                         # Linux`,
+          '',
+          `  # Add to remote ~/.zshrc:`,
+          `  if [ -S /tmp/cmux-fwd.sock ]; then`,
+          `    export CMUX_SOCKET_PATH=/tmp/cmux-fwd.sock`,
+          `    [ -z "$CMUX_WORKSPACE_ID" ] && [ -f /tmp/cmux-fwd.env ] && . /tmp/cmux-fwd.env`,
+          `  fi`,
+          '',
+          `  # Or run: bash remote-setup.sh`,
+        ].join('\n'),
+        `Remote setup for ${host}`,
+      );
+    }
+  }
+
+  // Step 11: Outro
   if (verify.allPassed) {
     p.outro(pc.green('cc-cmux is installed and ready!'));
   } else {
@@ -362,7 +483,17 @@ export async function uninstall(): Promise<void> {
     spin2.stop('No configuration directory found');
   }
 
-  // 3. Clean up temp files
+  // 3. Re-enable cmux's built-in Claude hooks
+  try {
+    execSync('defaults delete com.cmuxterm.app claudeCodeHooksEnabled', {
+      timeout: 3000,
+    });
+    p.log.info('Re-enabled cmux built-in Claude hooks');
+  } catch {
+    // Non-critical
+  }
+
+  // 4. Clean up temp files
   try {
     const tmpDir = '/tmp/cc-cmux';
     if (existsSync(tmpDir)) {
