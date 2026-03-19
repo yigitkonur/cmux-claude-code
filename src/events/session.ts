@@ -15,6 +15,7 @@ import { STATUS_DISPLAY, formatStatusValue } from '../features/status.js';
 import { detectGitInfo } from '../features/git.js';
 import { deleteTabTitle } from '../features/tab-title.js';
 import { LOG_SOURCE } from '../features/logger.js';
+import { hostname } from 'node:os';
 
 const STALE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -81,6 +82,37 @@ export async function onSessionStart(
     commands.push(cmd.reportGitBranch(s.gitBranch, s.gitDirty));
   }
 
+  // Detect SSH / remote session
+  const isSSH = !!(process.env['SSH_CONNECTION'] || process.env['SSH_CLIENT'] || process.env['SSH_TTY']);
+  const hostName = hostname();
+
+  if (isSSH) {
+    // Report remote hostname prominently
+    const user = process.env['USER'] || process.env['LOGNAME'] || '';
+    const hostLabel = user ? `${user}@${hostName}` : hostName;
+    commands.push(
+      cmd.reportMeta('host', `${hostLabel} (ssh)`, { icon: 'network', color: '#F59E0B' }),
+    );
+
+    // Report the actual remote cwd
+    if (event.cwd) {
+      commands.push(
+        cmd.reportMeta('remote_cwd', event.cwd, { icon: 'folder', color: '#6B7280' }),
+      );
+    }
+
+    // Log SSH info
+    if (config.features.logs) {
+      commands.push(
+        cmd.log(`SSH session: ${hostLabel}`, { level: 'info', source: LOG_SOURCE }),
+      );
+    }
+  } else {
+    // Local session — clear any stale SSH metadata from previous session
+    commands.push(cmd.clearMeta('host'));
+    commands.push(cmd.clearMeta('remote_cwd'));
+  }
+
   // Report model
   if (s.model) {
     commands.push(
@@ -127,6 +159,8 @@ export async function onSessionEnd(
 
   // Clear metadata
   commands.push(cmd.clearMeta('model'));
+  commands.push(cmd.clearMeta('host'));
+  commands.push(cmd.clearMeta('remote_cwd'));
   commands.push(cmd.clearStatus('git'));
 
   try {
