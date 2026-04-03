@@ -83,98 +83,122 @@ function extractFlags(tokens: string[]): { positional: string[]; flags: Record<s
 }
 
 /**
- * Convert V1 command to V2 RPC call. Returns null for commands with no V2 equivalent
- * (they'll be silently dropped — acceptable degradation over SSH).
+ * Status color map — workspace tab color reflects the current state.
+ * This gives visual status feedback over SSH even without sidebar pills.
  */
-function v1ToRpc(command: string): RpcCall | null {
+const STATUS_COLORS: Record<string, string> = {
+  '#50C878': '#50C878', // green — ready/done
+  '#FFD700': '#FFD700', // gold — thinking
+  '#4C8DFF': '#4C8DFF', // blue — working
+  '#FF6B35': '#FF6B35', // orange — waiting
+  '#FF4444': '#FF4444', // red — error
+  '#9B59B6': '#9B59B6', // purple — compacting
+};
+
+/**
+ * Convert V1 command to V2 RPC calls.
+ *
+ * Over SSH, sidebar V1 commands have no direct V2 equivalents.
+ * Creative workaround using confirmed-working V2 methods:
+ *   - set_status → tab.action rename (status in tab title)
+ *                + workspace.action set-color (color reflects state)
+ *   - clear_status → tab.action clear_name + workspace.action clear-color
+ *   - notify_target → notification.create_for_surface
+ *   - workspace_action → workspace.action
+ *   - log, progress, meta → silently dropped (no V2 equivalent)
+ *
+ * Returns array of RPC calls (some commands need 2: title + color).
+ */
+function v1ToRpc(command: string): RpcCall[] {
   const tokens = tokenize(command);
-  if (tokens.length === 0) return null;
+  if (tokens.length === 0) return [];
   const cmd = tokens[0];
   const { positional, flags, message } = extractFlags(tokens);
 
   switch (cmd) {
     case 'set_status': {
       // set_status key "value" --icon=X --color=#hex --tab=W
-      // → tab.action rename with status in title
+      // → tab.action rename (title) + workspace.action set-color (state color)
       const value = positional[1] || '';
-      return { method: 'tab.action', params: { action: 'rename', title: value } };
+      const color = flags['color'] || '';
+      const calls: RpcCall[] = [
+        { method: 'tab.action', params: { action: 'rename', title: value } },
+      ];
+      if (color && STATUS_COLORS[color]) {
+        calls.push({ method: 'workspace.action', params: { action: 'set-color', color } });
+      }
+      return calls;
     }
 
     case 'clear_status':
-      // Reset tab title to empty (cmux will show default)
-      return { method: 'tab.action', params: { action: 'rename', title: '' } };
+      return [
+        { method: 'tab.action', params: { action: 'clear_name' } },
+        { method: 'workspace.action', params: { action: 'clear-color' } },
+      ];
 
     case 'set_progress':
-      // No direct V2 equivalent — progress is embedded in status title
-      // Caller should combine status + progress in the tab title
-      return null;
+      // Progress not available over SSH — silently skip.
+      // The status title from set_status already shows tool info.
+      return [];
 
     case 'clear_progress':
-      return null;
+      return [];
 
     case 'log':
       // No sidebar log over SSH — silently drop
-      return null;
+      return [];
 
     case 'clear_log':
-      return null;
+      return [];
 
     case 'notify': {
-      // notify "title|subtitle|body"
       const parts = (positional[0] || '').split('|');
-      return {
+      return [{
         method: 'notification.create',
-        params: {
-          title: parts[0] || '',
-          subtitle: parts[1] || '',
-          body: parts[2] || '',
-        },
-      };
+        params: { title: parts[0] || '', subtitle: parts[1] || '', body: parts[2] || '' },
+      }];
     }
 
     case 'notify_target': {
-      // notify_target workspaceId surfaceId "title|subtitle|body"
       const surfaceId = positional[1] || '';
       const parts = (positional[2] || '').split('|');
-      return {
+      return [{
         method: 'notification.create_for_surface',
-        params: {
-          surface_id: surfaceId,
-          title: parts[0] || '',
-          subtitle: parts[1] || '',
-          body: parts[2] || '',
-        },
-      };
+        params: { surface_id: surfaceId, title: parts[0] || '', subtitle: parts[1] || '', body: parts[2] || '' },
+      }];
     }
 
     case 'clear_notifications':
-      return { method: 'notification.clear', params: {} };
+      return [{ method: 'notification.clear', params: {} }];
 
     case 'set_agent_pid':
-      return null; // No V2 equivalent
+      return []; // No V2 equivalent — cmux crash recovery won't work over SSH
 
     case 'clear_agent_pid':
-      return null;
+      return [];
 
     case 'report_git_branch':
-      return null; // No V2 equivalent
+      return []; // No V2 equivalent
 
     case 'report_meta':
-      return null;
+      return [];
 
     case 'clear_meta':
-      return null;
+      return [];
 
     case 'reset_sidebar':
-      return { method: 'tab.action', params: { action: 'rename', title: '' } };
+      return [
+        { method: 'tab.action', params: { action: 'clear_name' } },
+        { method: 'workspace.action', params: { action: 'clear-color' } },
+      ];
 
     case 'workspace_action': {
       const action = (flags['action'] || '').replace(/_/g, '-');
-      return { method: 'workspace.action', params: { action } };
+      return [{ method: 'workspace.action', params: { action } }];
     }
 
     default:
-      return null;
+      return [];
   }
 }
 
@@ -286,21 +310,23 @@ export class CmuxSocket {
   }
 
   private fireRpc(command: string): void {
-    const rpc = v1ToRpc(command);
-    if (!rpc) return; // No V2 equivalent — silently skip
-    try {
-      const jsonParams = JSON.stringify(rpc.params);
-      execFile(this.cmuxBin, ['rpc', rpc.method, jsonParams], { timeout: 3000 }, () => {});
-    } catch {}
+    const calls = v1ToRpc(command);
+    if (calls.length === 0) return;
+    for (const rpc of calls) {
+      try {
+        const jsonParams = JSON.stringify(rpc.params);
+        execFile(this.cmuxBin, ['rpc', rpc.method, jsonParams], { timeout: 3000 }, () => {});
+      } catch {}
+    }
   }
 
   private sendRpc(command: string): Promise<string> {
-    // For identify, use system.identify directly
     if (command === 'identify --json') {
       return this.execRpc('system.identify', {});
     }
-    const rpc = v1ToRpc(command);
-    if (!rpc) return Promise.resolve('');
-    return this.execRpc(rpc.method, rpc.params);
+    const calls = v1ToRpc(command);
+    if (calls.length === 0) return Promise.resolve('');
+    // Return the result of the first call (most meaningful)
+    return this.execRpc(calls[0].method, calls[0].params);
   }
 }
