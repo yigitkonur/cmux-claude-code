@@ -180,10 +180,7 @@ the built-in integration handles 6 hook events. we handle all 6 plus 10 more:
 ### one-liner
 
 ```bash
-git clone https://github.com/yigitkonur/cmux-claude-pro.git ~/.cmux-claude-pro \
-  && cd ~/.cmux-claude-pro \
-  && npm install && npm run build \
-  && bash install.sh
+rm -rf /tmp/cmux-claude-pro && cd /tmp && git clone https://github.com/yigitkonur/cmux-claude-pro.git && cd cmux-claude-pro && npm install && npm run build && bash install.sh
 ```
 
 the installer automatically:
