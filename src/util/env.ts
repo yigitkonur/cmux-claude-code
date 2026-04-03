@@ -28,9 +28,18 @@ function querySocket(socketPath: string, command: string, timeoutMs = 500): stri
  * IMPORTANT: current_workspace returns the FOCUSED workspace, not the
  * workspace containing the SSH tab. We only use it as absolute last resort.
  */
+function isTcpAddress(addr: string): boolean {
+  return addr.includes(':') && !addr.startsWith('/');
+}
+
 function loadForwardedEnv(): void {
   const socketPath = process.env['CMUX_SOCKET_PATH'] || '';
   const workspaceId = process.env['CMUX_WORKSPACE_ID'] || '';
+
+  // Case 0: cmux ssh — TCP relay address (127.0.0.1:PORT). Trust it.
+  if (socketPath && workspaceId && isTcpAddress(socketPath)) {
+    return;
+  }
 
   // Case 1: local cmux with valid workspace ID (not forwarded socket)
   if (socketPath && workspaceId && socketPath !== FWD_SOCK) {

@@ -57,7 +57,8 @@ async function main(): Promise<void> {
   // Load config (cached after first call)
   const config = loadConfig();
   const env = getCmuxEnv();
-  const socket = new CmuxSocket(env.socketPath);
+  const cmuxBin = process.env['CMUX_BIN'] ?? 'cmux';
+  const socket = new CmuxSocket(env.socketPath, cmuxBin);
   const cmd = new CmuxCommands(env.workspaceId);
   const state = new StateManager(event.session_id);
   const ctx: HandlerContext = { socket, cmd, state, config, env };
