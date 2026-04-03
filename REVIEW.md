@@ -1,6 +1,6 @@
 # cc-cmux — Implementation Review Against cmux Sidebar API Docs
 
-> Comprehensive audit of `cmux-claude-pro` against the [cmux Sidebar Integration API](./cmux-sidebar-docs.md) reference documentation. Covers protocol compliance, best practices, quality, gaps, and recommendations.
+> Comprehensive audit of `cmux-claude-code` against the [cmux Sidebar Integration API](./cmux-sidebar-docs.md) reference documentation. Covers protocol compliance, best practices, quality, gaps, and recommendations.
 
 ---
 

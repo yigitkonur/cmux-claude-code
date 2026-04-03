@@ -1,5 +1,5 @@
 /**
- * Status priority system for the cmux sidebar (cmux-claude-pro).
+ * Status priority system for the cmux sidebar (cmux-claude-code).
  *
  * Multiple events can try to set status simultaneously (e.g. a tool fires
  * while an agent is starting). The priority system ensures the most important

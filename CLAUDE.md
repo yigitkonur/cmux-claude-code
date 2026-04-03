@@ -1,4 +1,4 @@
-# cmux-claude-pro
+# cmux-claude-code
 
 ## Build (remote — Mac mini)
 

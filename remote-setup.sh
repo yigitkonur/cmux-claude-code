@@ -1,5 +1,5 @@
 #!/bin/bash
-# cmux-claude-pro remote setup
+# cmux-claude-code remote setup
 # run this on any remote machine (SSH/ET target) to enable sidebar integration.
 #
 # usage: bash remote-setup.sh
@@ -16,8 +16,8 @@
 set -e
 
 echo ""
-echo "  cmux-claude-pro remote setup"
-echo "  ============================"
+echo "  cmux-claude-code remote setup"
+echo "  ============================="
 echo ""
 
 # Detect shell profile
@@ -33,12 +33,12 @@ else
 fi
 
 # Add cmux socket detection if not already present
-if grep -q "cmux-claude-pro" "$PROFILE" 2>/dev/null; then
+if grep -q "cmux-claude-code" "$PROFILE" 2>/dev/null; then
   echo "  [ok] shell profile already configured ($PROFILE)"
 else
   cat >> "$PROFILE" << 'BLOCK'
 
-# cmux-claude-pro: detect forwarded cmux socket for SSH/ET sidebar integration
+# cmux-claude-code: detect forwarded cmux socket for SSH/ET sidebar integration
 # SSH SendEnv/AcceptEnv provides correct per-connection workspace/surface IDs.
 # Env file is fallback only (for ET/mosh where SendEnv is unavailable).
 if [ -S /tmp/cmux-fwd.sock ] && [ -n "$SSH_CONNECTION" ]; then

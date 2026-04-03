@@ -1,4 +1,4 @@
-# cmux-claude-pro
+# cmux-claude-code
 
 the definitive claude code + cmux integration. real-time status pills, progress bars, sidebar logs, desktop notifications, git integration, subagent tracking — all wired up through 16 claude code hooks and cmux's unix socket.
 
@@ -110,13 +110,13 @@ every claude code lifecycle event we handle:
 
 ## vs the built-in integration
 
-cmux ships with its own claude code integration (via a wrapper script at `Resources/bin/claude` that injects `--settings` with 6 hooks). cmux-claude-pro replaces it completely with 16 hooks and way more features.
+cmux ships with its own claude code integration (via a wrapper script at `Resources/bin/claude` that injects `--settings` with 6 hooks). cmux-claude-code replaces it completely with 16 hooks and way more features.
 
 ### event-by-event comparison
 
 the built-in integration handles 6 hook events. we handle all 6 plus 10 more:
 
-| hook event | cmux built-in | cmux-claude-pro | what we add |
+| hook event | cmux built-in | cmux-claude-code | what we add |
 |---|---|---|---|
 | `SessionStart` | sets agent PID via `set_agent_pid` | sets PID + Ready status + git branch + model metadata + clear stale state | git, model, richer init |
 | `SessionEnd` | clears status + PID + notifications | clears status + PID + notifications + progress + logs + metadata + state files | full cleanup |
@@ -124,20 +124,20 @@ the built-in integration handles 6 hook events. we handle all 6 plus 10 more:
 | `PreToolUse` | clears notifications, sets "Running" (async) | sets "Working: Edit: foo.ts" with tool name, increments progress | tool-specific status |
 | `Stop` | sets "Idle", sends `notify_target` | sets "Done", completes progress to 100%, sends `notify_target` with message preview | done vs idle, progress |
 | `Notification` | classifies + forwards via `notify_target`, sets "Needs input" | forwards via `notify_target`, sets "Needs input" | same |
-| `PostToolUse` | — | logs every tool result to sidebar (`Read: foo.ts`, `Bash: \`npm test\``) | **new** |
-| `PostToolUseFailure` | — | logs failures with warning level | **new** |
-| `PermissionRequest` | — | sets "Waiting" status, sends notification | **new** |
-| `StopFailure` | — | sets "Error" status, sends error notification | **new** |
-| `SubagentStart` | — | logs agent spawn, shows count in status | **new** |
-| `SubagentStop` | — | logs agent completion | **new** |
-| `PreCompact` | — | sets "Compacting..." status, logs start | **new** |
-| `PostCompact` | — | logs completion, reverts status | **new** |
-| `TaskCompleted` | — | logs task completion | **new** |
-| `WorktreeCreate` | — | logs worktree creation | **new** |
+| `PostToolUse` | -- | logs every tool result to sidebar (`Read: foo.ts`, `Bash: \`npm test\``) | **new** |
+| `PostToolUseFailure` | -- | logs failures with warning level | **new** |
+| `PermissionRequest` | -- | sets "Waiting" status, sends notification | **new** |
+| `StopFailure` | -- | sets "Error" status, sends error notification | **new** |
+| `SubagentStart` | -- | logs agent spawn, shows count in status | **new** |
+| `SubagentStop` | -- | logs agent completion | **new** |
+| `PreCompact` | -- | sets "Compacting..." status, logs start | **new** |
+| `PostCompact` | -- | logs completion, reverts status | **new** |
+| `TaskCompleted` | -- | logs task completion | **new** |
+| `WorktreeCreate` | -- | logs worktree creation | **new** |
 
 ### feature comparison
 
-| feature | cmux built-in | cmux-claude-pro |
+| feature | cmux built-in | cmux-claude-code |
 |---|---|---|
 | hook events | 6 | **16** |
 | status states | 3 (Running, Idle, Needs input) | **7** (Ready, Thinking, Working, Waiting, Done, Error, Compacting) |
@@ -160,7 +160,7 @@ the built-in integration handles 6 hook events. we handle all 6 plus 10 more:
 
 ### cmux primitives comparison
 
-| socket command | cmux built-in | cmux-claude-pro |
+| socket command | cmux built-in | cmux-claude-code |
 |---|---|---|
 | `set_status` | yes — key: `claude_code` | yes — same key |
 | `clear_status` | yes | yes |
@@ -180,7 +180,7 @@ the built-in integration handles 6 hook events. we handle all 6 plus 10 more:
 ### one-liner
 
 ```bash
-rm -rf /tmp/cmux-claude-pro && cd /tmp && git clone https://github.com/yigitkonur/cmux-claude-pro.git && cd cmux-claude-pro && npm install && npm run build && bash install.sh
+rm -rf /tmp/cmux-claude-code && cd /tmp && git clone https://github.com/yigitkonur/cmux-claude-code.git && cd cmux-claude-code && npm install && npm run build && bash install.sh
 ```
 
 the installer automatically:
@@ -194,8 +194,8 @@ the installer automatically:
 
 ```bash
 # 1. clone
-git clone https://github.com/yigitkonur/cmux-claude-pro.git
-cd cmux-claude-pro
+git clone https://github.com/yigitkonur/cmux-claude-code.git
+cd cmux-claude-code
 
 # 2. build (needs node 20+)
 npm install
@@ -209,7 +209,7 @@ bash install.sh
 
 ### what the installer does with cmux's built-in integration
 
-cmux-claude-pro takes over the `claude_code` status key. the installer automatically runs:
+cmux-claude-code takes over the `claude_code` status key. the installer automatically runs:
 
 ```bash
 defaults write com.cmuxterm.app claudeCodeHooksEnabled -bool false
@@ -260,14 +260,14 @@ watch the cmux sidebar update. announce each step number before executing it.
 
 step 1 — WRITE (creates a test file)
 create a file /tmp/cmux-test-alpha.txt with this content:
-"hello from cmux-claude-pro
+"hello from cmux-claude-code
 this file tests the sidebar integration
 TODO: verify grep finds this line
 export const status = 'working';"
 
 step 2 — WRITE (creates a second test file)
 create a file /tmp/cmux-test-beta.txt with this content:
-"second test file for cmux-claude-pro
+"second test file for cmux-claude-code
 export function demo() { return true; }
 TODO: clean up after test"
 
@@ -287,7 +287,7 @@ step 7 — BASH (runs a command)
 run: cat /tmp/cmux-test-alpha.txt | wc -l
 
 step 8 — BASH (another command)
-run: echo "cmux-claude-pro sidebar test — all tools working"
+run: echo "cmux-claude-code sidebar test — all tools working"
 
 step 9 — READ FAILURE (triggers warning log)
 try to read /tmp/cmux-test-this-does-not-exist.txt
@@ -307,7 +307,7 @@ step 13 — CLEANUP OFFER
 list all files that were created during this test:
 - /tmp/cmux-test-alpha.txt
 - /tmp/cmux-test-beta.txt
-ask me: "test complete — all cmux-claude-pro sidebar features verified! want me to delete the test files?"
+ask me: "test complete — all cmux-claude-code sidebar features verified! want me to delete the test files?"
 if i say yes, delete them. if i say no, leave them.
 ```
 
@@ -360,7 +360,7 @@ if i say yes, delete them. if i say no, leave them.
 
 ## ssh / et / remote machines
 
-when you ssh (or et) into a remote machine and run claude code there, cmux-claude-pro can update **your local sidebar** with the remote session's status, including the remote hostname and cwd.
+when you ssh (or et) into a remote machine and run claude code there, cmux-claude-code can update **your local sidebar** with the remote session's status, including the remote hostname and cwd.
 
 ### how it works
 
@@ -424,7 +424,7 @@ scp remote-setup.sh myserver: && ssh myserver bash remote-setup.sh
 add to the remote machine's `~/.zshrc` or `~/.bashrc` (the setup script does this automatically):
 
 ```bash
-# cmux-claude-pro: detect forwarded cmux socket
+# cmux-claude-code: detect forwarded cmux socket
 # SSH SendEnv/AcceptEnv provides correct per-connection workspace/surface IDs.
 # Env file is fallback only (for ET/mosh where SendEnv is unavailable).
 if [ -S /tmp/cmux-fwd.sock ] && [ -n "$SSH_CONNECTION" ]; then
@@ -478,7 +478,7 @@ claude code hook event
 
 same socket protocol as the official integration, plus 6 extras:
 
-| primitive | official cmux | cmux-claude-pro | what it does |
+| primitive | official cmux | cmux-claude-code | what it does |
 |---|---|---|---|
 | `set_status` | yes | yes | status pill with icon + color |
 | `clear_status` | yes | yes | cleanup |

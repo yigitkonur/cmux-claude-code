@@ -1,5 +1,5 @@
 #!/bin/bash
-# cmux-claude-pro installer
+# cmux-claude-code installer
 # works on both local (cmux) and remote (SSH) machines
 # on machines without cmux, the handler simply no-ops (exits 0 silently)
 set -e
@@ -8,8 +8,8 @@ INSTALL_DIR="$HOME/.cc-cmux"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo ""
-echo "  cmux-claude-pro"
-echo "  ==============="
+echo "  cmux-claude-code"
+echo "  ================"
 echo ""
 
 # Create install directory
@@ -56,7 +56,7 @@ fi
 
 # Verify node is available
 if ! command -v node &>/dev/null; then
-  echo "  [!!] node not found. cmux-claude-pro requires Node.js 20+."
+  echo "  [!!] node not found. cmux-claude-code requires Node.js 20+."
   exit 1
 fi
 
@@ -77,13 +77,13 @@ else
 fi
 
 # ---- Disable cmux's built-in Claude Code integration ----
-# cmux-claude-pro takes over the 'claude_code' status namespace.
+# cmux-claude-code takes over the 'claude_code' status namespace.
 # running both causes two systems fighting over the same status pill.
 # the preference key is 'claudeCodeHooksEnabled' in com.cmuxterm.app.
 if defaults read com.cmuxterm.app claudeCodeHooksEnabled 2>/dev/null | grep -q "1"; then
   defaults write com.cmuxterm.app claudeCodeHooksEnabled -bool false
   echo "  [ok] disabled cmux's built-in claude integration (was enabled)"
-  echo "       cmux-claude-pro replaces it with 16 hooks vs 6, progress bars,"
+  echo "       cmux-claude-code replaces it with 16 hooks vs 6, progress bars,"
   echo "       sidebar logs, 7 status states vs 3, and more."
 elif defaults read com.cmuxterm.app claudeCodeHooksEnabled 2>/dev/null | grep -q "0"; then
   echo "  [ok] cmux's built-in claude integration already disabled"

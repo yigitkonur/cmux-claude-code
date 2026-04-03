@@ -1,8 +1,8 @@
-# cmux-claude-pro — interactive test script
+# cmux-claude-code — interactive test script
 
 paste the prompt below into a fresh claude code session to see every sidebar feature in action. works in any directory — even an empty folder. creates temp files, exercises every hook, then cleans up after itself.
 
-> **prerequisite:** cmux-claude-pro installed, cmux's built-in claude integration disabled, claude code restarted.
+> **prerequisite:** cmux-claude-code installed, cmux's built-in claude integration disabled, claude code restarted.
 
 ---
 
@@ -14,14 +14,14 @@ watch the cmux sidebar update. announce each step number before executing it.
 
 step 1 — WRITE (creates a test file)
 create a file /tmp/cmux-test-alpha.txt with this content:
-"hello from cmux-claude-pro
+"hello from cmux-claude-code
 this file tests the sidebar integration
 TODO: verify grep finds this line
 export const status = 'working';"
 
 step 2 — WRITE (creates a second test file)
 create a file /tmp/cmux-test-beta.txt with this content:
-"second test file for cmux-claude-pro
+"second test file for cmux-claude-code
 export function demo() { return true; }
 TODO: clean up after test"
 
@@ -41,7 +41,7 @@ step 7 — BASH (runs a command)
 run: cat /tmp/cmux-test-alpha.txt | wc -l
 
 step 8 — BASH (another command)
-run: echo "cmux-claude-pro sidebar test — all tools working"
+run: echo "cmux-claude-code sidebar test — all tools working"
 
 step 9 — READ FAILURE (triggers warning log)
 try to read /tmp/cmux-test-this-does-not-exist.txt
@@ -61,7 +61,7 @@ step 13 — CLEANUP OFFER
 list all files that were created during this test:
 - /tmp/cmux-test-alpha.txt
 - /tmp/cmux-test-beta.txt
-ask me: "test complete — all cmux-claude-pro sidebar features verified! want me to delete the test files?"
+ask me: "test complete — all cmux-claude-code sidebar features verified! want me to delete the test files?"
 if i say yes, delete them. if i say no, leave them.
 ```
 
